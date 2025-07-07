@@ -1,17 +1,15 @@
-{ config, lanIp, ... }:
+{ config, networking, ... }:
 let
-  hlServicesIp = "10.0.1.1/24";
+  serverListenPort = 51820;
+  inherit (networking.interfaces) vpnServer;
 in
 {
-  bindings."${lanIp}"."wireguardWg0" = config.networking.wireguard.interfaces."wg0".listenPort;
+  nixBind.bindings."0.0.0.0".udp."wireguardServer" = serverListenPort;
   networking.wireguard.enable = true;
-  networking.wireguard.interfaces."wg0" = {
+  networking.wireguard.interfaces."${vpnServer.name}" = {
     privateKeyFile = config.sops.secrets.wireguardPrivateKey.path;
-    listenPort = 51820;
-    ips = [
-      hlServicesIp
-      "10.0.2.1/24"
-    ];
+    listenPort = serverListenPort;
+    ips = map (el: el.cidrAddress) (builtins.attrValues vpnServer.ips);
     peers = [
       {
         name = "nino";

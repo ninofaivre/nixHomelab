@@ -1,3 +1,4 @@
+{ test }:
 { config, lib, ... }:
 let
   dataDir = "/data/services/caddy";
@@ -9,11 +10,11 @@ in
   };
 
   nftablesService.services."caddy".chains = {
-    "out" = "ip daddr localhost tcp dport ${toString config.bindings."127.0.0.1".caddyAdmin} accept";
+    "out" = "ip daddr 127.0.0.1 tcp dport ${toString config.nixBind.bindings."127.0.0.1".tcp."caddyAdmin"} accept";
     "in" = "";
   };
 
-  bindings."127.0.0.1" = {
+  nixBind.bindings."127.0.0.1"."tcp" = {
     "caddyTest.hl" = 80;
     "caddyAdmin" = 2019;
   };
@@ -24,7 +25,7 @@ in
       grace_period 1s
     '';
     virtualHosts = {
-      "test.hl.6e696e6f.dev:${toString config.bindings."127.0.0.1"."caddyTest.hl"}" = {
+      "${test.domain}:${toString config.nixBind.bindings."127.0.0.1".tcp."caddyTest.hl"}" = {
         listenAddresses = [ "127.0.0.1" ];
         extraConfig = ''
           encode gzip

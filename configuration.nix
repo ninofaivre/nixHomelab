@@ -2,7 +2,7 @@
 # your system. Help is available in the configuration.nix(5) man page, on
 # https://search.nixos.org/options and in the NixOS manual (`nixos-help`).
 
-{ config, lib, pkgs, lanIp, ... }:
+{ config, lib, pkgs, networking, ... }:
 {
   imports = [
     ./hardware-configuration.nix
@@ -35,11 +35,15 @@
     enable = true;
   };
 
+  security.sudo.extraConfig = ''
+    Defaults  timestamp_timeout=20
+  '';
+
   # Define a user account. Don't forget to set a password with ‘passwd’.
   users.users.nino = {
     isNormalUser = true;
     extraGroups = [ "wheel" ]; # Enable ‘sudo’ for the user.
-    packages = with pkgs; [ vim hwinfo zfs parted pciutils htop powertop age sops ];
+    packages = with pkgs; [ config.services.kanidm.package vim hwinfo zfs parted pciutils htop powertop age sops ];
     openssh = {
       authorizedKeys = {
         keys = [
@@ -77,14 +81,24 @@
 
   # List services that you want to enable:
 
+
   # Enable the OpenSSH daemon.
-  bindings."${lanIp}"."ssh" = 22;
+  nixBind.bindings."${networking.interfaces.upLink.ips.lan.address}".tcp."ssh" = 22;
+  nixBind.bindings."${networking.interfaces.vpnServer.ips.adminServices.address}".tcp."ssh" = 22;
+  systemd.services.sshd.after = ["systemd-networkd-wait-online.service" "wireguard-wg0.service"];
   services.openssh = {
     enable = true;
-    listenAddresses = [
+    openFirewall = false;
+    listenAddresses =
+      with networking.interfaces;
+    [
       {
-        addr = lanIp;
-        port = config.bindings."${lanIp}"."ssh";
+        addr = networking.interfaces.upLink.ips.lan.address;
+        port = config.nixBind.bindings.${upLink.ips.lan.address}.tcp.ssh;
+      }
+      {
+        addr = networking.interfaces.vpnServer.ips.adminServices.address;
+        port = config.nixBind.bindings.${vpnServer.ips.adminServices.address}.tcp.ssh;
       }
     ];
     settings = {

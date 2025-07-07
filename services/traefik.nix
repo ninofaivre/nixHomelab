@@ -1,25 +1,45 @@
-{ config, myUtils, lanIp, lanLocalDnsIp, ... }:
+{ servicesConfig }:
+{ config, pkgs, myUtils, networking, ... }:
 let
   dataDir = "/data/services/traefik";
-  paperlessHostName = "paperless.hl.6e696e6f.dev";
   cloudflareTokenCredID = myUtils.assertions.isValidSystemdCredentialID "cloudflareDnsToken";
 in
 {
-  nftablesService.services."traefik".chains = with config.networking.nftables.marks; {
-    "out" = ''
-      ip daddr ${config.services.paperless.address} tcp dport ${toString config.services.paperless.port} accept
-      ip daddr localhost tcp dport { ${toString config.bindings."127.0.0.1"."caddyTest.hl"}, ${toString config.services.homepage-dashboard.listenPort} } accept
+  nftablesService.services."traefik".chains =
+    with config.networking.nftables.marks;
+    with config.nixBind;
+  {
+    out = ''
+      ${getNftTarget {
+        address = "127.0.0.1";
+        protocol = "tcp";
+        ports = [ "caddyTest.hl" "homepage" "wgportal" "paperless" "kanidm" ];
+      }} accept
+
       #ip daddr 127.0.0.53 udp dport 53 accept
       #ip daddr 1.1.1.1 udp dport 53 accept
       #ip daddr 1.0.0.1 udp dport 53 accept
       meta l4proto { udp, tcp } th dport 53 accept
-      tcp dport 443 ct zone != { ${toString ct.zones.local}, ${toString ct.zones.vpnServices} } accept
-      log prefix "NFT traefik out drop :"
+      tcp dport 443 ct zone != { ${toString ct.zones.lan}, ${toString ct.zones.vpnServices} } accept
     '';
-    "in" = ''
-      ip daddr 127.0.0.1 tcp dport { 81,444 } ct zone { ${toString ct.zones.local}, ${toString ct.zones.vpnServices} } accept
-      ip daddr ${lanIp} tcp dport { 80, 443 } accept
-      ip daddr ${lanLocalDnsIp} tcp dport { 80, 443 } ct zone ${toString ct.zones.local} accept
+    "in" =
+       with networking.interfaces.upLink.ips;
+    ''
+      ${getNftTarget {
+        address = "127.0.0.1";
+        protocol = "tcp";
+        ports = [ "traefikPrivateHttp" "traefikPrivateHttps" ];
+      }} ct zone { ${toString ct.zones.lan}, ${toString ct.zones.vpnServices} } accept
+      ${getNftTarget {
+        address = lan.address;
+        protocol = "tcp";
+        ports = [ "traefikPublicHttp" "traefikPublicHttps" ];
+      }} accept
+      ${getNftTarget {
+        address = lanLocalDns.address;
+        protocol = "tcp";
+        ports = [ "traefikPrivateHttpLocalDns" "traefikPrivateHttpsLocalDns" ];
+      }} ct zone ${toString ct.zones.lan} accept
     '';
   };
   systemd.services.traefik = {
@@ -32,56 +52,61 @@ in
       ];
       TemporaryFileSystem = "/data";
       BindPaths = dataDir;
+      BindReadOnlyPaths = "${pkgs.writeText "hosts" ''
+        127.0.0.1 ${servicesConfig.kanidm.domain}
+      ''
+      }:/etc/hosts:norbind";
     };
   };
-  bindings = {
-    "127.0.0.1" = {
+  nixBind.bindings = {
+    "127.0.0.1".tcp = {
       "traefikPrivateHttp" = 81;
       "traefikPrivateHttps" = 444;
     };
-    "${lanIp}" = {
+    "${networking.interfaces.upLink.ips.lan.address}".tcp = {
       "traefikPublicHttp" = 80;
       "traefikPublicHttps" = 443;
     };
-    "${lanLocalDnsIp}" = {
+    "${networking.interfaces.upLink.ips.lanLocalDns.address}".tcp = {
       "traefikPrivateHttpLocalDns" = 80;
       "traefikPrivateHttpsLocalDns" = 443;
     };
   };
-  services.traefik = 
-  let
-    inherit (config) bindings;
-  in
-  {
+  services.traefik = {
     enable = true;
     inherit dataDir;
     staticConfigOptions = {
-      log = { level = "INFO"; };
+      log = { level = "DEBUG"; };
+      accessLog = {};
       api = {
         dashboard = true;
         insecure = true;
       };
-      entryPoints = {
+      entryPoints = 
+      with config.nixBind;
+      with networking.interfaces.upLink.ips;
+      {
         "publicHttp" = {
-          address = "${lanIp}:${toString bindings.${lanIp}.traefikPublicHttp}";
+          address = getAddressWithPort lan.address "tcp" "traefikPublicHttp";
           http.redirections.entryPoint = { scheme = "https"; to = "publicHttps"; };
         };
-        "publicHttps".address = "${lanIp}:${toString bindings.${lanIp}.traefikPublicHttps}";
-
+        "publicHttps" = {
+          address = getAddressWithPort lan.address "tcp" "traefikPublicHttps";
+        };
         "privateHttp" = {
-          address = "localhost:${toString bindings."127.0.0.1".traefikPrivateHttp}";
+          address = getAddressWithPort "127.0.0.1" "tcp" "traefikPrivateHttp";
           http.redirections.entryPoint = { scheme = "https"; to = "publicHttps"; };
         };
         "privateHttps" = {
-          address = "localhost:${toString bindings."127.0.0.1".traefikPrivateHttps}";
+          address = getAddressWithPort "127.0.0.1" "tcp" "traefikPrivateHttps";
           asDefault = true;
         };
         "privateHttpLocalDns" = {
-          address = "${lanLocalDnsIp}:80";
+          address = getAddressWithPort lanLocalDns.address "tcp" "traefikPrivateHttpLocalDns";
           http.redirections.entryPoint = { scheme = "https"; to = "privateHttpsLocalDns"; };
         };
         "privateHttpsLocalDns" = {
-          address = "${lanLocalDnsIp}:443";
+          address = getAddressWithPort lanLocalDns.address "tcp" "traefikPrivateHttpsLocalDns";
           asDefault = true;
         };
       };
@@ -92,46 +117,58 @@ in
           dnsChallenge = {
             provider = "cloudflare";
             delayBeforeCheck = 5;
-            resolvers = [ "1.1.1.1:53" "1.0.0.1:53" ];
+            resolvers = [ "1.1.1.1:53" "1.0.0.1:53" ];# not local resolver to check propagation
           };
         };
       };
     };
-    dynamicConfigOptions = {
+    dynamicConfigOptions =
+      with networking.interfaces;
+    {
       http = {
         routers = {
           "paperless" = {
-            rule = "Host(`${paperlessHostName}`)";
+            rule = "Host(`${servicesConfig.paperless.domain}`)";
             service = "paperless";
             tls.certResolver = "cloudflare";
           };
+          "wgportal" = {
+            rule = "Host(`${servicesConfig.wgportal.domain}`)";
+            service = "wgportal";
+            tls.certResolver = "cloudflare";
+          };
           "homelab" = {
-            rule = "Host(`hl.6e696e6f.dev`)";
+            rule = "Host(`${servicesConfig.root.domain}`)";
             service = "noop@internal";
             middlewares = ["redirectionFromHlToHomepageDotHl"];
             tls.certResolver = "cloudflare";
           };
           "homepage" = {
-            rule = "Host(`homepage.hl.6e696e6f.dev`)";
+            rule = "Host(`${servicesConfig.homepage-dashboard.domain}`)";
             service = "homepage";
             tls.certResolver = "cloudflare";
           };
+          "kanidm" = {
+            rule = "Host(`${servicesConfig.kanidm.domain}`)";
+            service = "kanidm";
+            tls.certResolver = "cloudflare";
+          };
           "testHomelabConnexionFromHome" = {
-            rule = "Host(`test.hl.6e696e6f.dev`) && ClientIP(`192.168.1.0/24`)";
+            rule = "Host(`${servicesConfig.test.domain}`) && ClientIP(`${upLink.ips.lan.cidrAddress}`)";
             service = "testHomelabConnexion";
             middlewares = ["testHomelabConnexionFromHome"];
             entryPoints = ["privateHttps"];
             tls.certResolver = "cloudflare";
           };
           "testHomelabConnexionFromHomeLocalDns" = {
-            rule = "Host(`test.hl.6e696e6f.dev`) && ClientIP(`192.168.1.0/24`)";
+            rule = "Host(`${servicesConfig.test.domain}`) && ClientIP(`${upLink.ips.lan.cidrAddress}`)";
             service = "testHomelabConnexion";
             middlewares = ["testHomelabConnexionFromHomeLocalDns"];
             entryPoints = ["privateHttpsLocalDns"];
             tls.certResolver = "cloudflare";
           };
           "testHomelabConnexionFromVpn" = {
-            rule = "Host(`test.hl.6e696e6f.dev`) && ClientIP(`10.0.1.0/24`)";
+            rule = "Host(`${servicesConfig.test.domain}`) && ClientIP(`${vpnServer.ips.privateServices.cidrAddress}`)";
             service = "testHomelabConnexion";
             middlewares = ["testHomelabConnexionFromVpn"];
             tls.certResolver = "cloudflare";
@@ -139,8 +176,8 @@ in
         };
         middlewares = {
           "redirectionFromHlToHomepageDotHl".redirectRegex = {
-            regex = "https://hl.6e696e6f.dev/(.*)";
-            replacement = "https://homepage.hl.6e696e6f.dev/$1";
+            regex = "https://${servicesConfig.root.domain}/(.*)";
+            replacement = "https://${servicesConfig.homepage-dashboard.domain}/$1";
             permanent = true;
           };
           "testHomelabConnexionFromHome".replacePathRegex = {
@@ -156,22 +193,24 @@ in
             replacement = "/$1/vpn";
           };
         };
-        services = {
-          "paperless" = {
-            loadBalancer.servers = [{
-              url = "http://${config.services.paperless.address}:${toString config.services.paperless.port}";
-            }];
-          };
-          "homepage" = {
-            loadBalancer.servers = [{
-              url = "http://127.0.0.1:${toString config.services.homepage-dashboard.listenPort}";
-            }];
-          };
-          "testHomelabConnexion" = {
-            loadBalancer.servers = [{
-              url = "http://localhost:${toString bindings."127.0.0.1"."caddyTest.hl"}";
-            }];
-          };
+        services =
+          with config.nixBind;
+        {
+          "paperless".loadBalancer.servers = [{
+            url = "http://${getAddressWithPort "127.0.0.1" "tcp" "paperless"}";
+          }];
+          "wgportal".loadBalancer.servers = [{
+            url = "http://${getAddressWithPort "127.0.0.1" "tcp" "wgportal"}";
+          }];
+          "kanidm".loadBalancer.servers = [{
+            url = "https://${servicesConfig.kanidm.domain}:${toString bindings."127.0.0.1".tcp."kanidm"}";
+          }];
+          "homepage".loadBalancer.servers = [{
+            url = "http://${getAddressWithPort "127.0.0.1" "tcp" "homepage"}";
+          }];
+          "testHomelabConnexion".loadBalancer.servers = [{
+            url = "http://${getAddressWithPort "127.0.0.1" "tcp" "caddyTest.hl"}";
+          }];
         };
       };
     };

@@ -60,6 +60,61 @@ in
         with NFSet and restartTriggers.
       '';
     };
+    trackDomains = mkOption {
+      default = { http ? [], https ? [] }:
+        {
+          http = lib.attrsets.genAttrs http (name: {});
+          https = lib.attrsets.genAttrs https (name: {});
+        };
+      readOnly = true;
+    };
+    trackedDomains =
+    let
+      getDomainSubmodule = port: types.attrsOf (types.submodule ({name, ...}: {
+          options = {
+            target = {
+              nftables = mkOption {
+                default = suffix: ''
+                  tcp dport ${port} ip daddr @${name}.v4 ${suffix}
+                  tcp dport ${port} ip6 daddr @${name}.v6 ${suffix}
+                '';
+                readOnly = true;
+              };
+              dnsmasq = mkOption {
+                default = [
+                  "/${name}/4#inet#filter#${name}.v4"
+                  "/${name}/6#inet#filter#${name}.v6"
+                ];
+                readOnly = true;
+              };
+            };
+            nftablesSets = mkOption {
+              default = ''
+                set ${name}.v4 {
+                  type ipv4_addr
+                  timeout 4h
+                }
+  
+                set ${name}.v6 {
+                  type ipv6_addr
+                  timeout 4h
+                }
+              '';
+              readOnly = true;
+            };
+          };
+        }));
+    in
+    {
+      https = mkOption {
+        type = getDomainSubmodule "443";
+        default = {};
+      };
+      http = mkOption {
+        type = getDomainSubmodule "80";
+        default = {};
+      };
+    };
     table = {
       family = mkOption {
         default = null;     
@@ -80,13 +135,22 @@ in
         default = {};
         type = types.attrsOf (types.submodule {
           options = {
-            header = mkOption {
-              type = types.str;
-            };
-            footer = mkOption {
+            content = mkOption {
               type = types.str;
             };
             preSubChain = mkOption {
+              default = null;
+              type = types.nullOr types.str;
+            };
+            postSubChain = mkOption {
+              default = null;
+              type = types.nullOr types.str;
+            };
+            preSubChainDuplicated = mkOption {
+              default = null;
+              type = types.nullOr types.str;
+            };
+            postSubChainDuplicated = mkOption {
               default = null;
               type = types.nullOr types.str;
             };
@@ -142,25 +206,38 @@ in
                 ${preSubChain}
               }
             '';
+          inherit (cfg.table.chains.${chainName}) postSubChain;
+          postSubChainString = if postSubChain == null then "" else
+           ''
+             chain postSub${getSuffixChainName chainName} {
+               ${postSubChain}
+             }
+           '';
         in
         ''
-          ${preSubChainString}chain ${chainName}${cfg.table.chainsSuffix} {
-            ${chain.header}
-            ${gotosString}
-            ${chain.footer}
+          ${preSubChainString}${postSubChainString}chain ${chainName}${cfg.table.chainsSuffix} {
+            ${builtins.replaceStrings ["__generated__"] [gotosString] chain.content}
           }
         ''
       ) cfg.table.chains);
       gotoDstChains = builtins.concatStringsSep "\n" (mapAttrsToList (_: service:
         builtins.concatStringsSep "\n" (mapAttrsToList (chainName: chain:
           let
-            inherit (cfg.table.chains.${chainName}) preSubChain;
+            inherit (cfg.table.chains.${chainName}) preSubChain preSubChainDuplicated;
             preSubChainsJmpString = if preSubChain == null then "" else
               "jump preSub${getSuffixChainName chainName}\n";
+            inherit (cfg.table.chains.${chainName}) postSubChain postSubChainDuplicated;
+            postSubChainJmpString = if postSubChain == null then "" else
+              "\njump postSub${getSuffixChainName chainName}";
+            varExpansion = str: builtins.replaceStrings ["__serviceName__"] [service.setName] str;
+            preSubChainDuplicatedExpanded = if preSubChainDuplicated == null then "" else
+              "${varExpansion preSubChainDuplicated}\n";
+            postSubChainDuplicatedExpanded = if postSubChainDuplicated == null then "" else
+              "\n${varExpansion postSubChainDuplicated}";
           in
           ''
             chain ${service.setName}${getSuffixChainName chainName} {
-              ${preSubChainsJmpString}${chain}
+              ${preSubChainDuplicatedExpanded}${preSubChainsJmpString}${chain}${postSubChainJmpString}${postSubChainDuplicatedExpanded}
             }
           ''
         ) service.chains)
