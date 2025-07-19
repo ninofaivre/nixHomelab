@@ -7,8 +7,8 @@
         "zig2nix": "zig2nix"
       },
       "locked": {
-        "lastModified": 1751906075,
-        "narHash": "sha256-0zNY2ySEF7G4JtoMrtaqG/FpoJA899o7j3B87KA8G8I=",
+        "lastModified": 1752061511,
+        "narHash": "sha256-GsJlDgeJ09s70z/CkmxzSXsW67Y593nNl5kOQT+t0LY=",
         "path": "/home/nino/acns",
         "type": "path"
       },
@@ -59,8 +59,8 @@
         "nixpkgs": "nixpkgs_3"
       },
       "locked": {
-        "lastModified": 1751907547,
-        "narHash": "sha256-kUMpUDL0wv4TjgXusCUliRjBw3lrqRwkotecWRQQPwU=",
+        "lastModified": 1751908233,
+        "narHash": "sha256-HtmQRJoVV5SeSaGHdf8B0yz5wI3SNXAV5M49nba6t3c=",
         "path": "/home/nino/kresd-acns",
         "type": "path"
       },
@@ -100,6 +100,18 @@
         "id": "nixpkgs",
         "ref": "release-25.05",
         "type": "indirect"
+      }
+    },
+    "nixpkgs-fork-kresd-add-lua-modules": {
+      "locked": {
+        "lastModified": 1751918440,
+        "narHash": "sha256-YdPFYUnaip2MG0RWitgU3EuxKKZTAeweKiB/8pmtBQQ=",
+        "path": "/home/nino/nixpkgs-fork-kresd-add-lua-modules",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/nino/nixpkgs-fork-kresd-add-lua-modules",
+        "type": "path"
       }
     },
     "nixpkgs-fork-systemd-credentials": {
@@ -214,6 +226,7 @@
         "acns": "acns",
         "kresd-acns": "kresd-acns",
         "nixpkgs": "nixpkgs_4",
+        "nixpkgs-fork-kresd-add-lua-modules": "nixpkgs-fork-kresd-add-lua-modules",
         "nixpkgs-fork-systemd-credentials": "nixpkgs-fork-systemd-credentials",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "sops-nix": "sops-nix"

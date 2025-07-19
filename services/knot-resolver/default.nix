@@ -1,13 +1,9 @@
-{ servicesConfig }:
-{ pkgs, config, lib, networking, kresdAcnsPkgs, ... }:
-let
-  kresdAcns = kresdAcnsPkgs.kresdLuaModules.acns;
-  luaEnv = pkgs.symlinkJoin {
-    name = "lua-env";
-    paths = [ kresdAcns ] ++ (kresdAcns.propagatedBuildInputs or []);
-  };
-in
+{ servicesConfig, vectorDnstapSocketPath }:
+{ config, lib, networking, myPkgs, ... }:
 {
+  imports = [
+    (import ./vectorSocketDirtyFix.nix { inherit vectorDnstapSocketPath; })
+  ];
   nixBind.bindings = {
     "${networking.interfaces.upLink.ips.lan.address}" = {
       udp."knot-resolver" = 53;
@@ -18,12 +14,14 @@ in
       tcp."knot-resolver" = 53;
     };
   };
-  systemd.services."kresd@".environment = {
-    LUA_PATH = "${luaEnv}/share/lua/5.1/?.lua;${luaEnv}/share/lua/5.1/?/init.lua;;";
-    LUA_CPATH = "${luaEnv}/lib/lua/5.1/?.so;;";
-  };
-  systemd.services."kresd@".serviceConfig.SupplementaryGroups = [config.services.acns.unixSocketAccessGroupName];
+
+  users.groups."vectorAccessKresd" = {};
+  systemd.services."kresd@".serviceConfig.SupplementaryGroups = [
+    config.services.acns.unixSocketAccessGroupName
+    "vectorAccessKresd"
+  ];
   systemd.services."kresd@".serviceConfig.RuntimeDirectoryMode = lib.mkForce "0771";
+
   services.kresd =
   let
     domains = builtins.filter (domain: domain != null) (lib.attrsets.mapAttrsToList (_: value: value.domain) servicesConfig);
@@ -31,12 +29,14 @@ in
   {
     enable = true;
     listenPlain = [ "127.0.0.1:53" "${networking.interfaces.upLink.ips.lan.address}:53" ];
+    luaModules = [ myPkgs.kresdLuaModules.acns ];
     extraConfig = ''
       modules = {
         'hints > iterate',
         'policy',
+        'nsid',
         'dnstap',
-        'acns'
+        'acns',
       }
 
       acns.config ({
@@ -44,6 +44,7 @@ in
         unixSocketAccessGroupName = "${config.services.acns.unixSocketAccessGroupName}",
         perfStats = false,
         rules = {
+        --[[
           policy.domains({
               family = 1,
               tableName = "filter",
@@ -51,6 +52,7 @@ in
             },
             policy.todnames({'api.github.com'})
           ),
+        ]]
           policy.domains({
               family = 1,
               tableName = "filter",
@@ -78,6 +80,18 @@ in
       
       policy.add(policy.domains(policy.PASS, internalDomainsTod))
       policy.add(policy.all(policy.TLS_FORWARD(forwarders)))
+      
+      _G['dnstap'] = {
+        config = dnstap.config,
+        foreignLoad = function ()
+          print('(re)Loading dnstap')
+          return dnstap.config({
+            socket_path = "${vectorDnstapSocketPath}",
+            identity = nsid.name() or "",
+            client = { log_queries = false, log_responses = true }
+          })
+        end
+      }
     '';
   };
 }

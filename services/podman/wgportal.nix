@@ -86,6 +86,7 @@ in
     ];
   };
   systemd.services."podman-wgportal" = {
+    enable = false;
     serviceConfig = {
       Restart = lib.mkOverride 90 "always";
     };

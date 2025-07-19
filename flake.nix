@@ -6,6 +6,8 @@
     nixpkgs-unstable.url = "nixpkgs/nixos-unstable";
 
     nixpkgs-fork-systemd-credentials.url = "github:ninofaivre/nixpkgs/kanidm-provision-use-systemd-credentials";
+    # nixpkgs-fork-kresd-add-lua-modules.url = "github:ninofaivre/nixpkgs/kresd-add-lua-modules";
+    nixpkgs-fork-kresd-add-lua-modules.url = "path:/home/nino/nixpkgs-fork-kresd-add-lua-modules";
 
     sops-nix.url = "github:Mic92/sops-nix";
 
@@ -13,16 +15,21 @@
     kresd-acns.url = "path:/home/nino/kresd-acns";
     #acns.url = "github:ninofaivre/acns";
     acns.url = "path:/home/nino/acns";
+    yafw.url = "github:ninofaivre/yafw";
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-fork-systemd-credentials, sops-nix, kresd-acns, acns }:
+  outputs = {
+    self, nixpkgs, nixpkgs-unstable,
+    nixpkgs-fork-systemd-credentials, nixpkgs-fork-kresd-add-lua-modules,
+    sops-nix, kresd-acns, acns, yafw
+  }:
   let
     system = "x86_64-linux";
     myUtils = (import ./myUtils/myUtils.nix) { inherit (nixpkgs) lib; };
     minimalProfile = (import "${nixpkgs.outPath}/nixos/modules/profiles/minimal.nix");
     unstablePkgs = import nixpkgs-unstable { inherit system; };
     #masterPkgs = import nixpkgs-master { inherit system; };
-    kresdAcnsPkgs = kresd-acns.packages.${system};
+    myPkgs = kresd-acns.packages.${system} ++ yafw.packages.${system};
     networking = {
       interfaces = builtins.foldl' (acc: {name, value}:
         acc // {
@@ -119,22 +126,24 @@
     nixosConfigurations."NixOsNas" = nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = {
-        inherit myUtils minimalProfile networking unstablePkgs kresdAcnsPkgs;
+        inherit myUtils minimalProfile networking unstablePkgs myPkgs;
       };
       modules = [
         minimalProfile
         ({...}: {
           disabledModules = [
-            # TODO move to stable when paperless 15.1 (at least) will be on it
+            # TODO move to stable when paperless 15.1 (at least) is released
             "services/misc/paperless.nix"
             # TODO move from fork when PR gets merged
             "services/security/kanidm.nix"
+            "services/networking/kresd.nix"
           ];
         })
         # TODO move to stable when paperless 15.1 (at least) will be on it
         "${nixpkgs-unstable}/nixos/modules/services/misc/paperless.nix"
         # TODO move from fork when PR gets merged
         "${nixpkgs-fork-systemd-credentials}/nixos/modules/services/security/kanidm.nix"
+        "${nixpkgs-fork-kresd-add-lua-modules}/nixos/modules/services/networking/kresd.nix"
         sops-nix.nixosModules.sops
         acns.nixosModules.acns
         ./bindings/bindings.nix

@@ -2,11 +2,13 @@
 { ... }:
 let
   nftablesServiceLogFifo = "/var/run/ulogd/nftablesService.pipe";
-  dnsmasqServiceLogFifo = "/var/run/dnsmasq/dnsmasq.pipe";
+  vectorDnstapSocketPath = "/run/vector/dnstap.sock";
 in
 {
   imports = [
-    (import ./knot-resolver.nix { inherit servicesConfig; })
+    (import ./knot-resolver {
+      inherit servicesConfig vectorDnstapSocketPath;
+    })
     (import ./traefik.nix { inherit servicesConfig; })
     (import ./paperless {
       inherit (servicesConfig.paperless) domain dataDir;
@@ -23,7 +25,10 @@ in
       inherit (servicesConfig.acme) dataDir;
       inherit (servicesConfig) kanidm;
     })
-    (import ./vector.nix { inherit nftablesServiceLogFifo dnsmasqServiceLogFifo; })
+    (import ./vector.nix {
+      inherit nftablesServiceLogFifo;
+      dnstapSocketPath = vectorDnstapSocketPath;
+    })
     (import ./ulogd.nix { inherit nftablesServiceLogFifo; })
     ./acns.nix
   ];

@@ -1,5 +1,5 @@
 { nftablesServiceLogFifo }:
-{ lib, pkgs, ... }:
+{ pkgs, ... }:
 let
   fifoScript = pkgs.writeShellScript "pre-start" ''
     if [ ! -p ${nftablesServiceLogFifo} ]; then

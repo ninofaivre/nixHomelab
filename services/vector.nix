@@ -1,5 +1,5 @@
-{ nftablesServiceLogFifo, dnsmasqServiceLogFifo }:
-{ config, lib, pkgs, unstablePkgs, ... }:
+{ nftablesServiceLogFifo, dnstapSocketPath }:
+{ config, pkgs, unstablePkgs, ... }:
 let
   nftablesFifoScript = pkgs.writeShellScript "readFifo" ''
     while :; do
@@ -9,107 +9,127 @@ let
       sleep 1
     done
   '';
-  dnsmasqScript = pkgs.writeShellScript "dnsmasqJctl" ''
-    while :; do
-      if [ -p ${dnsmasqServiceLogFifo} ]; then
-        cat ${dnsmasqServiceLogFifo} | grep -E '127.0.0.1/[[:digit:]]+ reply [^[:space:]]+ is ([0-9]{1,3}\.){3}[0-9]{1,3}'
-      fi
-      sleep 1
-    done
-  '';
 in
 {
   systemd.services.vector.serviceConfig = {
-    ReadOnlyPaths = [ nftablesServiceLogFifo dnsmasqServiceLogFifo ];
-    ExecPaths = [ nftablesFifoScript dnsmasqScript ];
+    ReadOnlyPaths = [ nftablesServiceLogFifo ];
+    ExecPaths = [ nftablesFifoScript ];
+    RuntimeDirectory = "vector";
+    RuntimeDirectoryMode = "771";
   };
+
   services.vector.enable = true;
   services.vector.package = unstablePkgs.vector;
   services.vector.journaldAccess = true;
   services.vector.settings = {
     enrichment_tables = {
-      dnsmasqTable = {
+      ipToDomainName = {
         type = "memory";
-        inputs = [ "parsedDnsmasq" ];
-        ttl = 10;
-        /*
-        schema = {
-          ip = "string";
-          domain = "string";
-        };
-        */
+        ttl = 1;
+        inputs = [ "parsedKnot-resolver" ];
       };
     };
     sources = {
-      nftables = {
-        type = "exec";
-        command = [ nftablesFifoScript ];
-        mode = "streaming";
+      # nftables = {
+      #   type = "exec";
+      #   command = [ nftablesFifoScript ];
+      #   mode = "streaming";
+      # };
+      testoa = {
+        type = "file";
+        include = [ nftablesServiceLogFifo ];
+        fingerprint = {
+          strategy = "device_and_inode";
+        };
       };
-      dnsmasq = {
-        type = "exec";
-        command = [ dnsmasqScript ];
-        mode = "streaming";
+      knot-resolver = {
+        type = "dnstap";
+        mode = "unix";
+        socket_path = dnstapSocketPath;
+        socket_file_mode = 511;
       };
     };
     transforms = {
-      parsedDnsmasq = {
+      parsedKnot-resolver = {
         type = "remap";
-        inputs = [ "dnsmasq" ];
+        inputs = [ "knot-resolver" ];
         source = ''
-          . = { "testoa": "coucou" }
-        ''/*''
-          splitted_message = split!(.message, " ")
-          . = {}
-          . = set!(., [splitted_message[5]], splitted_message[3])
-          log("setting dnsmasqTable to :" + to_string!(.))
-        ''*/;
-      };
-      parsedNftables = {
-        type = "remap";
-        inputs = [ "nftables" ];
-        source = ''
-          str, err = to_string(.message)
-          if false == assert_eq!(err, null, "Error during to_string(.message): " + err) {
-            return null
-          } 
-          parsed_key_values, err = parse_key_value(str, "=", ",")
-          if false == assert_eq!(err, null, "Error during parse_key_value(...): " + err) {
-            return null
+          if .dataType != "Message" || .messageType != "ClientResponse" || .responseAddress != "127.0.0.1" {
+            return . = {}
           }
-          . = {}
-          for_each(parsed_key_values) -> |key,value| {
-            . = set!(., split(key, "."), value)
-          }
-          .nftablesService = object(.nftablesService) ?? {}
-          if .oob.in != "" {
-            .nftablesService.src = null
-            return null
-          }
-          for_each(${builtins.toJSON config.nixBind.bindings}) -> |address,value| {
-            if .ip.daddr.str == address {
-              for_each(value) -> |proto,value| {
-                for_each(value) -> |serviceName,port| {
-                  if get!(., [proto,"dport"]) == to_string(port) {
-                    .nftablesService.dst = serviceName
-                    return null
-                  }
-                }
-              }
+          res = {}
+          for_each(array!(.responseData.answers || [])) -> |_, answer| {
+            if answer.recordType == "A" || answer.recordType == "AAAA" {
+              res = set!(res, [answer.rData], answer.domainName)
             }
           }
-          existing, err = get_enrichment_table_record("dnsmasqTable", { "key": .ip.daddr.str })
-          if (err != null) {
-            return null
-          }
-          .nftablesService.dst = existing
+          return . = res
         '';
       };
+      parsedTestoa = {
+        type = "remap";
+        inputs = [ "testoa" ];
+        source = ''
+          if is_string(.message) == false {
+            log(".message is not a string", level: "error")
+            return . = {}
+          }
+          parsed_key_values, err = parse_key_value(.message, "=", ",")
+          if err != null {
+            log("parsed_key_values failed" + (("for : " + .message + " : " + err) ?? ""), level: "error")
+            return . = {}
+          }
+          res = {}
+          for_each(parsed_key_values) -> |key,value| {
+            res = set!(res, split(key, "."), value)
+          }
+          return res
+        '';
+      };
+    #   parsedNftables = {
+    #     type = "remap";
+    #     inputs = [ "nftables" ];
+    #     source = ''
+    #       str, err = to_string(.message)
+    #       if false == assert_eq!(err, null, "Error during to_string(.message): " + err) {
+    #         return null
+    #       } 
+    #       parsed_key_values, err = parse_key_value(str, "=", ",")
+    #       if false == assert_eq!(err, null, "Error during parse_key_value(...): " + err) {
+    #         return . = {}
+    #       }
+    #       . = {}
+    #       for_each(parsed_key_values) -> |key,value| {
+    #         . = set!(., split(key, "."), value)
+    #       }
+    #       .nftablesService = object(.nftablesService) ?? {}
+    #       if .oob.in != "" {
+    #         return .nftablesService.src = null
+    #       }
+    #       for_each(${builtins.toJSON config.nixBind.bindings}) -> |address,value| {
+    #         if .ip.daddr.str == address {
+    #           for_each(value) -> |proto,value| {
+    #             for_each(value) -> |serviceName,port| {
+    #               if get!(., [proto,"dport"]) == to_string(port) {
+    #                 return .nftablesService.dst = serviceName
+    #               }
+    #             }
+    #           }
+    #         }
+    #       }
+    #       existing, err = get_enrichment_table_record("ipToDomainName", {
+    #         "key": .ip.daddr.str
+    #       })
+    #       if err == null {
+    #         .nftablesService.dst = existing.value
+    #       }
+    #     '';
+    #   };
     };
     sinks = {
       consoleOutput = {
         type = "console";
-        inputs = [ /*"parsedNftables"*/ "parsedDnsmasq" ];
+        inputs = [ "testoa" ];
         encoding.codec = "json";
         encoding.json.pretty = true;
       };
