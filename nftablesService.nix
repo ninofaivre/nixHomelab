@@ -1,11 +1,8 @@
-{ lib, config, ... }:
+{ lib, config, myUtils, ... }:
 # TODO remove with at start of file to use it in equality
 with lib;
 let
   cfg = config.nftablesService;
-  capitalizeFirstLetter = str:
-    strings.toUpper (strings.substring 0 1 str) +
-    strings.substring 1 (strings.stringLength str) str;
   convertUnitNameToSetName = unitName:
   let
     splited = lib.strings.splitString "-" unitName;
@@ -13,7 +10,7 @@ let
       lib.strings.concatStrings
         ([ (builtins.head splited) ] ++
           (if cfg.namingConvention == "camel" then
-             map capitalizeFirstLetter (builtins.tail splited)
+             map myUtils.capitalizeFirstLetter (builtins.tail splited)
            else if cfg.namingConvention == "snake" then
              map (el : "_${el}") (builtins.tail splited)
            else [ "err" ]
@@ -61,60 +58,98 @@ in
       '';
     };
     trackDomains = mkOption {
-      default = { http ? [], https ? [] }:
-        {
-          http = lib.attrsets.genAttrs http (name: {});
-          https = lib.attrsets.genAttrs https (name: {});
-        };
-      readOnly = true;
+      type = types.listOf types.str;
+      default = [];
     };
-    trackedDomains =
-    let
-      getDomainSubmodule = port: types.attrsOf (types.submodule ({name, ...}: {
-          options = {
-            target = {
-              nftables = mkOption {
-                default = suffix: ''
-                  tcp dport ${port} ip daddr @${name}.v4 ${suffix}
-                  tcp dport ${port} ip6 daddr @${name}.v6 ${suffix}
-                '';
-                readOnly = true;
-              };
-              dnsmasq = mkOption {
-                default = [
-                  "/${name}/4#inet#filter#${name}.v4"
-                  "/${name}/6#inet#filter#${name}.v6"
-                ];
-                readOnly = true;
-              };
-            };
-            nftablesSets = mkOption {
-              default = ''
-                set ${name}.v4 {
-                  type ipv4_addr
-                  timeout 4h
-                }
-  
-                set ${name}.v6 {
-                  type ipv6_addr
-                  timeout 4h
-                }
-              '';
+    getTargets = {
+      nftables = mkOption {
+        default = domains: suffix:
+          lib.concatMapStringsSep "\n" (domain:
+            cfg.trackedDomains.${domain}.targets.nftables.get suffix
+          ) domains
+        ;
+        readOnly = true;
+      };
+    };
+    trackedDomains = let
+      # TODO quick hack with cool easter egg, handle error if domain
+      # is using 42
+      # currently only accepting *.myDomain.com and not *Domain.com because
+      # of policy.suffix limitations.
+      domain2setName = domain: myUtils.replacePrefix "*." "_42_." domain;
+      getNftablesTarget = name: suffix: ''
+        ip daddr @${domain2setName name}.v4 ${suffix}
+        ip6 daddr @${domain2setName name}.v6 ${suffix}
+      '';
+      getDnsMasqTarget = name: [
+        "/${name}/4#inet#${cfg.table.name}#${domain2setName name}.v4"
+        "/${name}/6#inet#${cfg.table.name}#${domain2setName name}.v6"
+      ];
+      getAcnsTarget = name: [
+        "${domain2setName name}.v4"
+        "${domain2setName name}.v6"
+      ];
+      # cannot use toLua here because of vars as keys
+      getKresAcnsPluginTarget = name: "policy." +
+        (if lib.hasPrefix "*" name then "suffix" else "domains") + ''
+          ({
+              family = 1,
+              tableName = "${cfg.table.name}",
+              [kres.type.A] = {
+                enabled = true,
+                setName = "${domain2setName name}.v4",
+              },
+              [kres.type.AAAA] = {
+                enabled = true,
+                setName = "${domain2setName name}.v6",
+              },
+            },
+            policy.todnames({'${lib.removePrefix "*." name}'})
+          ),
+        '';
+    in mkOption {
+      type = types.attrsOf (types.submodule ({name, ...}: {
+        options = {
+          targets = {
+            nftables.get = mkOption {
+              default = getNftablesTarget name;
               readOnly = true;
             };
+            dnsmasq.get = mkOption {
+              default = getDnsMasqTarget;
+              readOnly = true;
+            };
+            kresAcnsPlugin.get = mkOption {
+              default = getKresAcnsPluginTarget;
+              readOnly = true;
+            };
+            acns.get = mkOption {
+              default = getAcnsTarget;
+            };
           };
-        }));
-    in
-    {
-      https = mkOption {
-        type = getDomainSubmodule "443";
-        default = {};
-      };
-      http = mkOption {
-        type = getDomainSubmodule "80";
-        default = {};
-      };
+          nftablesSets = mkOption {
+            default = ''
+              set ${domain2setName name}.v4 {
+                type ipv4_addr
+                timeout 4h
+              }
+
+              set ${domain2setName name}.v6 {
+                type ipv6_addr
+                timeout 4h
+              }
+            '';
+            readOnly = true;
+          };
+        };
+      }));
     };
+    # getTrackedDomains = mkOption {
+    #   default = domains: prefix: suffix:
+    #     builtins.map(domain: cfg.trackedDomains.${domain}.target.n) domains
+    #   ;
+    #   readOnly = true;
+    # };
     table = {
       family = mkOption {
         default = null;     
@@ -169,6 +204,9 @@ in
     };
   };
   config = mkIf cfg.enable {
+    nftablesService.trackedDomains = builtins.listToAttrs (
+      builtins.map (domain: { name = domain; value = {}; }) cfg.trackDomains
+    );
     systemd.services = builtins.mapAttrs (key: value: {
       after = [ "nftables.service" ];
       requires = [ "nftables.service" ];
@@ -190,7 +228,7 @@ in
       ) cfg.services);
       getSuffixChainName = chainName:
         if cfg.namingConvention == "snake" then "_${chainName}" else
-        if cfg.namingConvention == "camel" then (capitalizeFirstLetter chainName) else "ERROR";
+        if cfg.namingConvention == "camel" then (myUtils.capitalizeFirstLetter chainName) else "ERROR";
       gotoSrcChains = builtins.concatStringsSep "\n" (mapAttrsToList (chainName: chain:
         let
           gotosString = builtins.concatStringsSep "\n" (mapAttrsToList (serviceName: service:

@@ -1,6 +1,9 @@
 { lib, config, myUtils, ... }:
 let
   cfg = config.nixBind;
+  # TODO nix 25.05
+  concatMapAttrsStringSep = sep: f: attrs:
+    lib.concatStringsSep sep (lib.attrValues (lib.mapAttrs f attrs));
 in
 {
   options.nixBind = with lib; {
@@ -8,6 +11,7 @@ in
       default = {};
       type = types.attrsOf (types.submodule ({name, ...}: {
         options = {
+          # TODO make proto a submodule
           tcp = mkOption {
             default = {};
             type = types.attrsOf types.int;
@@ -26,15 +30,35 @@ in
           }
         ) values;
     };
-    getNftTarget = mkOption {
-      default = { address, protocol, ports }:
-      "ip daddr ${address} ${protocol} dport ${myUtils.listToNftablesSet
-        (map (port: (toString cfg.bindings."${address}"."${protocol}"."${port}")) ports)}";
+    getNftTargets = mkOption {
+      default = bindings: action:
+      let
+        getNftPorts = address: proto: ports:
+          myUtils.listToNftablesSet (map (port:
+            toString cfg.bindings."${address}"."${proto}"."${port}"
+          ) ports)
+        ;
+      in
+        # TODO nix 25.05
+        #lib.strings.
+        concatMapAttrsStringSep "" (address: value:
+          concatMapAttrsStringSep
+            ""
+            (proto: ports:
+              "ip daddr ${address} ${proto} dport ${getNftPorts address proto ports} ${
+                if builtins.hasAttr "cond" value then
+                  " ${value.cond}"
+                else
+                  ""
+              } ${action}\n"
+            ) value.protos
+        ) bindings
+      ;
       readOnly = true;
     };
     getAddressWithPort = mkOption {
-      default = address: protocol: port:
-      "${address}:${toString cfg.bindings."${address}"."${protocol}"."${port}"}";
+      default = address: proto: port:
+      "${address}:${toString cfg.bindings."${address}"."${proto}"."${port}"}";
       readOnly = true;
     };
   };

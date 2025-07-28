@@ -2,12 +2,12 @@
 { config, myUtils, lib, ... }:
 {
   nixBind.bindings."127.0.0.1".tcp.homepage = config.services.homepage-dashboard.listenPort;
-  nftablesService.trackedDomains = config.nftablesService.trackDomains {
-    https = ["api.github.com"];
-  };
+  nftablesService.trackDomains = [
+    "api.github.com"
+  ];
   nftablesService.services."homepage-dashboard".chains = {
     out = ''
-      #${config.nftablesService.trackedDomains.https."api.github.com".target.nftables "ct state new accept"}
+      ${config.nftablesService.trackedDomains."api.github.com".targets.nftables.get "tcp dport 443 ct state new accept"}
     '';
     "in" = "";
   };

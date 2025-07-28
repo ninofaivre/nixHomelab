@@ -12,41 +12,82 @@
     with networking.interfaces;
   {
     extraInputRules = ''
-      iifname "${upLink.name}" ${getNftTarget {
-        address = upLink.ips.lan.address;
-        protocol = "tcp";
-        ports = [ "traefikPublicHttp" "traefikPublicHttps" ];
-      }} accept
+      ${getNftTargets {
+        ${upLink.ips.lan.address} = {
+          protos = {
+            tcp = [
+              "traefikPublicHttp" "traefikPublicHttps"
+              "knot-resolver"
+            ];
+            udp = [
+              "knot-resolver"
+              "wireguardServer"
+            ];
+          };
+          cond = "iifname \"${upLink.name}\"";
+        };
+        ${upLink.ips.lanLocalDns.address} = {
+          protos = {
+            tcp = [
+              "traefikPrivateHttpLocalDns" "traefikPrivateHttpsLocalDns"
+            ];
+          };
+          cond = "iifname \"${upLink.name}\" ct zone ${
+            myUtils.listToNftablesSet (with ct.zones; [
+              lan
+            ])
+          }";
+        };
+      } "accept"}
 
-      iifname "${upLink.name}" ${getNftTarget {
-        address = upLink.ips.lan.address;
-        protocol = "tcp";
-        ports = [ "ssh" "knot-resolver" ];
-      }} ct zone ${toString ct.zones.lan} accept
+      ${getNftTargets {
+        ${upLink.ips.lan.address} = {
+          protos = {
+            tcp = [
+              "traefikPublicHttp" "traefikPublicHttps"
+            ];
+          };
+          cond = "iifname \"${upLink.name}\" ct zone ${
+            myUtils.listToNftablesSet (with ct.zones; [
+              vpnServices
+            ])
+          }";
+        };
+      } "accept"}
+      ${getNftTargets {
+        ${upLink.ips.lan.address} = {
+          protos = {
+            tcp = [
+              "ssh"
+              "knot-resolver"
+            ];
+            udp = [
+              "knot-resolver"
+            ];
+          };
+          cond = "iifname \"${upLink.name}\" ct zone ${
+            myUtils.listToNftablesSet (with ct.zones; [
+              lan
+            ])
+          }";
+        };
+      } "accept"}
 
-      iifname "${upLink.name}" ${getNftTarget {
-        address = upLink.ips.lan.address;
-        protocol = "udp";
-        ports = [ "knot-resolver" "wireguardServer" ];
-      }} accept
+      ${getNftTargets {
+        ${upLink.ips.lan.address} = {
+          protos = {
+            tcp = [
+              "ssh"
+            ];
+          };
+          cond = "iifname \"${vpnServer.name}\" ct zone ${
+            myUtils.listToNftablesSet (with ct.zones; [
+              vpnAdminServices
+            ])
+          }";
+        };
+      } "accept"}
 
-      iifname "${upLink.name}" ${getNftTarget {
-        address = upLink.ips.lanLocalDns.address;
-        protocol = "tcp";
-        ports = [ "traefikPrivateHttpLocalDns" "traefikPrivateHttpsLocalDns" ];
-      }} ct zone ${toString ct.zones.lan} accept
-
-      iifname "${upLink.name}" ${getNftTarget {
-        address = upLink.ips.lan.address;
-        protocol = "tcp";
-        ports = [ "traefikPublicHttp" "traefikPublicHttps" ];
-      }} ct zone ${toString ct.zones.vpnServices} accept
-
-      iifname "${vpnServer.name}" ${getNftTarget {
-        address = vpnServer.ips.adminServices.address;
-        protocol = "tcp";
-        ports = [ "ssh" ];
-      }} ct zone ${toString ct.zones.vpnAdminServices} accept
       iifname { "${upLink.name}", "${vpnServer.name}" } ip daddr 127.0.0.1 ct status dnat accept comment "need to accept dnat to localhost because it isn't considered forwarding"
     '';
     filterForward = true; # default to accept established,related and dnat
@@ -108,17 +149,18 @@
           ];
         in
         ''
-          ${lib.strings.concatMapStrings ({ nftablesSets, ... }: nftablesSets) ((builtins.attrValues config.nftablesService.trackedDomains.http) ++ (builtins.attrValues config.nftablesService.trackedDomains.https))}
+          ${lib.strings.concatMapStrings ({ nftablesSets, ... }: nftablesSets) (builtins.attrValues config.nftablesService.trackedDomains)}
 
           chain preZone {
             type filter hook prerouting priority raw; policy accept;
             ${zones.input}
           }
-          
+
           chain outZone {
             type filter hook output priority raw; policy accept;
             ${zones.output}
           }
+
           chain out {
             type filter hook output priority filter; policy drop;
             oifname "${vpnServer.name}" ct state established,related accept
@@ -151,7 +193,7 @@
             ct state established,related accept
           '';
           postSubChainDuplicated = ''
-            log prefix "dropped,nftablesService.src=__serviceName__" group ${toString config.services.ulogd.settings.logNftablesService.group}
+            log prefix "nftablesServices,nftablesService.src=__serviceName__" group ${toString config.services.ulogd.settings.logVector.group}
           '';
         };
         "in" = {
@@ -164,7 +206,7 @@
             ct mark ${toString config.networking.nftables.marks.ct.marks.nftablesService} accept
           '';
           postSubChainDuplicated = ''
-            log prefix "dropped,nftablesService.dst=__serviceName" group ${toString config.services.ulogd.settings.logNftablesService.group}
+            log prefix "nftablesServices,nftablesService.dst=__serviceName__" group ${toString config.services.ulogd.settings.logVector.group}
           '';
         };
       };

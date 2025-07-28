@@ -2,7 +2,7 @@
   description = "experiment flake config";
 
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-24.11";
+    nixpkgs.url = "nixpkgs/nixos-25.05";
     nixpkgs-unstable.url = "nixpkgs/nixos-unstable";
 
     nixpkgs-fork-systemd-credentials.url = "github:ninofaivre/nixpkgs/kanidm-provision-use-systemd-credentials";
@@ -15,7 +15,8 @@
     kresd-acns.url = "path:/home/nino/kresd-acns";
     #acns.url = "github:ninofaivre/acns";
     acns.url = "path:/home/nino/acns";
-    yafw.url = "github:ninofaivre/yafw";
+    # yafw.url = "github:ninofaivre/yafw";
+    yafw.url = "path:/home/nino/yafw";
   };
 
   outputs = {
@@ -29,7 +30,10 @@
     minimalProfile = (import "${nixpkgs.outPath}/nixos/modules/profiles/minimal.nix");
     unstablePkgs = import nixpkgs-unstable { inherit system; };
     #masterPkgs = import nixpkgs-master { inherit system; };
-    myPkgs = kresd-acns.packages.${system} ++ yafw.packages.${system};
+    myPkgs = {
+      inherit (yafw.packages.${system}) yafw;
+      inherit (kresd-acns.packages.${system}) kresdLuaModules;
+    };
     networking = {
       interfaces = builtins.foldl' (acc: {name, value}:
         acc // {

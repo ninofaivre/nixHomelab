@@ -1,8 +1,10 @@
-{ servicesConfig, vectorDnstapSocketPath }:
+# TODO :
+# * find out why not cached dns request are slow (slower than directly requesting forwarders)
+{ servicesConfig, vectorDnstapSocketPath, accessGroups }:
 { config, lib, networking, myPkgs, ... }:
 {
   imports = [
-    (import ./vectorSocketDirtyFix.nix { inherit vectorDnstapSocketPath; })
+    (import ./vectorSocketDirtyFix.nix { inherit vectorDnstapSocketPath accessGroups; })
   ];
   nixBind.bindings = {
     "${networking.interfaces.upLink.ips.lan.address}" = {
@@ -15,10 +17,9 @@
     };
   };
 
-  users.groups."vectorAccessKresd" = {};
   systemd.services."kresd@".serviceConfig.SupplementaryGroups = [
     config.services.acns.unixSocketAccessGroupName
-    "vectorAccessKresd"
+    accessGroups.vector.kresd
   ];
   systemd.services."kresd@".serviceConfig.RuntimeDirectoryMode = lib.mkForce "0771";
 
@@ -39,33 +40,23 @@
         'acns',
       }
 
+      log_level('info')
       acns.config ({
         socketPath = "/run/acns/acns.sock",
         unixSocketAccessGroupName = "${config.services.acns.unixSocketAccessGroupName}",
         perfStats = false,
-        rules = {
-        --[[
-          policy.domains({
-              family = 1,
-              tableName = "filter",
-              setName = "api.github.com.v4"
-            },
-            policy.todnames({'api.github.com'})
-          ),
-        ]]
-          policy.domains({
-              family = 1,
-              tableName = "filter",
-              setName = "wronnnnnnng"
-            },
-            policy.todnames({'google.com'})
-          )
-        }
+        debug = true,
+        rules = {${lib.strings.concatStringsSep
+          "\n"
+          (lib.attrsets.mapAttrsToList (name: value:
+            (value.targets.kresAcnsPlugin.get name)
+          ) config.nftablesService.trackedDomains)
+        }}
       })
 
       cache.size = 150 * MB
       internalDomains = ${lib.generators.toLua {} domains}
-      -- cannot use internalDomains here because todnames do not create a new dict but change the one he gets as a parameter
+      -- cannot use internalDomains here because todnames do not create a new dict but change the one it gets as a parameter
       internalDomainsTod = policy.todnames(${lib.generators.toLua {} domains})
       forwarders = {
         { '1.1.1.1', hostname='one.one.one.one' },

@@ -1,4 +1,4 @@
-# TODO PR to use systed-creds instead of bindReadOnlyPaths for provision secret files ???
+# TODO PR to use systemd-creds instead of bindReadOnlyPaths for provision secret files ???
 { domain, root, dataDir }:
 { lib, config, pkgs, ... }:
 let

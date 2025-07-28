@@ -1,15 +1,15 @@
-{ ... }:
+{ accessGroups }:
+{ config, lib, ... }:
 {
   services.acns = {
     enable = true;
-    unixSocketAccessGroupName = "acnsAccessKresd";
+    unixSocketAccessGroupName = accessGroups.acns.kresd;
     settings = {
       accessControl = {
         inet = {
-          filter = [
-            "api.github.com.v4"
-            "api.github.com.v6"
-          ];
+          filter = (lib.flatten (lib.attrsets.mapAttrsToList (name: value:
+            value.targets.acns.get name
+          ) config.nftablesService.trackedDomains));
         };
       };
     };

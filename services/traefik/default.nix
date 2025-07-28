@@ -1,47 +1,11 @@
-{ servicesConfig }:
+{ servicesConfig, staging }:
 { config, pkgs, myUtils, networking, ... }:
 let
   dataDir = "/data/services/traefik";
   cloudflareTokenCredID = myUtils.assertions.isValidSystemdCredentialID "cloudflareDnsToken";
 in
 {
-  nftablesService.services."traefik".chains =
-    with config.networking.nftables.marks;
-    with config.nixBind;
-  {
-    out = ''
-      ${getNftTarget {
-        address = "127.0.0.1";
-        protocol = "tcp";
-        ports = [ "caddyTest.hl" "homepage" "wgportal" "paperless" "kanidm" ];
-      }} accept
-
-      #ip daddr 127.0.0.53 udp dport 53 accept
-      #ip daddr 1.1.1.1 udp dport 53 accept
-      #ip daddr 1.0.0.1 udp dport 53 accept
-      meta l4proto { udp, tcp } th dport 53 accept
-      tcp dport 443 ct zone != { ${toString ct.zones.lan}, ${toString ct.zones.vpnServices} } accept
-    '';
-    "in" =
-       with networking.interfaces.upLink.ips;
-    ''
-      ${getNftTarget {
-        address = "127.0.0.1";
-        protocol = "tcp";
-        ports = [ "traefikPrivateHttp" "traefikPrivateHttps" ];
-      }} ct zone { ${toString ct.zones.lan}, ${toString ct.zones.vpnServices} } accept
-      ${getNftTarget {
-        address = lan.address;
-        protocol = "tcp";
-        ports = [ "traefikPublicHttp" "traefikPublicHttps" ];
-      }} accept
-      ${getNftTarget {
-        address = lanLocalDns.address;
-        protocol = "tcp";
-        ports = [ "traefikPrivateHttpLocalDns" "traefikPrivateHttpsLocalDns" ];
-      }} ct zone ${toString ct.zones.lan} accept
-    '';
-  };
+  imports = [ (import ./fw.nix { inherit staging; }) ];
   systemd.services.traefik = {
     environment = {
       "CF_DNS_API_TOKEN_FILE" = "%d/${cloudflareTokenCredID}";
@@ -76,11 +40,11 @@ in
     enable = true;
     inherit dataDir;
     staticConfigOptions = {
-      log = { level = "DEBUG"; };
+      log = { level = "ERROR"; };
       accessLog = {};
       api = {
-        dashboard = true;
-        insecure = true;
+        dashboard = false;
+        insecure = false;
       };
       entryPoints = 
       with config.nixBind;
@@ -113,11 +77,14 @@ in
       certificatesResolvers = {
         "cloudflare".acme = {
           email = "admin@6e696e6f.dev";
-          storage = "${dataDir}/acme.json";
+          storage = "${dataDir}/acme${if staging then "-staging" else ""}.json";
+          caServer = "https://acme${if staging then "-staging" else ""}-v02.api.letsencrypt.org/directory";
           dnsChallenge = {
             provider = "cloudflare";
-            delayBeforeCheck = 5;
-            resolvers = [ "1.1.1.1:53" "1.0.0.1:53" ];# not local resolver to check propagation
+            delayBeforeCheck = 60;
+            # prefer to not use local resolver to check for dns propagation
+            # /!\ only use ip (no domain name) in there /!\
+            resolvers = [ "1.1.1.1:53" "1.0.0.1:53" ];
           };
         };
       };
