@@ -1,4 +1,4 @@
-{ config, lib, ... }:
+{ lib, ... }:
 {
   sops = {
     age.keyFile = "/home/nino/.config/sops/age/keys.txt";

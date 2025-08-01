@@ -7,14 +7,17 @@
         "zig2nix": "zig2nix"
       },
       "locked": {
-        "lastModified": 1752924255,
-        "narHash": "sha256-0aKLxfiGSHSgZAzc7JkWkLn3B+9i3pvesYRFrNLyUVE=",
-        "path": "/home/nino/acns",
-        "type": "path"
+        "lastModified": 1754051577,
+        "narHash": "sha256-RlnKWUuPC5+y1ghZoysMlJqmH7OOnkfUJuHlDQxZpCg=",
+        "owner": "ninofaivre",
+        "repo": "acns",
+        "rev": "9a1a04c290cfaf1823605a2db0247b55c1b7d7e0",
+        "type": "github"
       },
       "original": {
-        "path": "/home/nino/acns",
-        "type": "path"
+        "owner": "ninofaivre",
+        "repo": "acns",
+        "type": "github"
       }
     },
     "flake-utils": {
@@ -77,14 +80,17 @@
         "nixpkgs": "nixpkgs_3"
       },
       "locked": {
-        "lastModified": 1753109692,
-        "narHash": "sha256-j4RXYjQsRxKH95kW+DKKB6vEmPPa9Ej2JvEmSe7Iv+w=",
-        "path": "/home/nino/kresd-acns",
-        "type": "path"
+        "lastModified": 1754051754,
+        "narHash": "sha256-h9SEL/IoiN5QawDSk/JRebeYbkHoda/3zuQqjkG1W18=",
+        "owner": "ninofaivre",
+        "repo": "kresd-acns",
+        "rev": "6fe6ba773dcc106ec75030140d1bcd0a1c76efda",
+        "type": "github"
       },
       "original": {
-        "path": "/home/nino/kresd-acns",
-        "type": "path"
+        "owner": "ninofaivre",
+        "repo": "kresd-acns",
+        "type": "github"
       }
     },
     "nix2zon": {
@@ -140,23 +146,27 @@
     },
     "nixpkgs-fork-kresd-add-lua-modules": {
       "locked": {
-        "lastModified": 1751918440,
-        "narHash": "sha256-YdPFYUnaip2MG0RWitgU3EuxKKZTAeweKiB/8pmtBQQ=",
-        "path": "/home/nino/nixpkgs-fork-kresd-add-lua-modules",
-        "type": "path"
+        "lastModified": 1754051171,
+        "narHash": "sha256-e2a6/tXPWVzYx5bFTg2lssW2h/IWhv7p8ITzK1ABec0=",
+        "owner": "ninofaivre",
+        "repo": "nixpkgs",
+        "rev": "0a60380a1cf16018240df2ad0ab09ee7796c2869",
+        "type": "github"
       },
       "original": {
-        "path": "/home/nino/nixpkgs-fork-kresd-add-lua-modules",
-        "type": "path"
+        "owner": "ninofaivre",
+        "ref": "kresd-add-lua-modules",
+        "repo": "nixpkgs",
+        "type": "github"
       }
     },
     "nixpkgs-fork-systemd-credentials": {
       "locked": {
-        "lastModified": 1745487951,
-        "narHash": "sha256-UYAEWbAmEddUzGO6m8jnXMr3BnqK3OvjCFtJpxDtAdE=",
+        "lastModified": 1754049015,
+        "narHash": "sha256-+aX6x/ASC6P0D+KeI6pbwMjVd1Cjt+K5m0w9fl28rw8=",
         "owner": "ninofaivre",
         "repo": "nixpkgs",
-        "rev": "2f7a6df9d20973a18be250994f41b9055b92d5ca",
+        "rev": "0c9b90fb802c9a245997fa89678d048566a8b551",
         "type": "github"
       },
       "original": {
@@ -198,11 +208,11 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1746904237,
-        "narHash": "sha256-3e+AVBczosP5dCLQmMoMEogM57gmZ2qrVSrmq9aResQ=",
+        "lastModified": 1753939845,
+        "narHash": "sha256-K2ViRJfdVGE8tpJejs8Qpvvejks1+A4GQej/lBk5y7I=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "d89fc19e405cb2d55ce7cc114356846a0ee5e956",
+        "rev": "94def634a20494ee057c76998843c015909d6311",
         "type": "github"
       },
       "original": {
@@ -243,11 +253,11 @@
     },
     "nixpkgs_4": {
       "locked": {
-        "lastModified": 1753489912,
-        "narHash": "sha256-uDCFHeXdRIgJpYmtcUxGEsZ+hYlLPBhR83fdU+vbC1s=",
+        "lastModified": 1753749649,
+        "narHash": "sha256-+jkEZxs7bfOKfBIk430K+tK9IvXlwzqQQnppC2ZKFj4=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "13e8d35b7d6028b7198f8186bc0347c6abaa2701",
+        "rev": "1f08a4df998e21f4e8be8fb6fbf61d11a1a5076a",
         "type": "github"
       },
       "original": {
@@ -304,11 +314,11 @@
         "nixpkgs": "nixpkgs_5"
       },
       "locked": {
-        "lastModified": 1746485181,
-        "narHash": "sha256-PxrrSFLaC7YuItShxmYbMgSuFFuwxBB+qsl9BZUnRvg=",
+        "lastModified": 1752544651,
+        "narHash": "sha256-GllP7cmQu7zLZTs9z0J2gIL42IZHa9CBEXwBY9szT0U=",
         "owner": "Mic92",
         "repo": "sops-nix",
-        "rev": "e93ee1d900ad264d65e9701a5c6f895683433386",
+        "rev": "2c8def626f54708a9c38a5861866660395bb3461",
         "type": "github"
       },
       "original": {
@@ -368,14 +378,17 @@
         "zig2nix": "zig2nix_2"
       },
       "locked": {
-        "lastModified": 1752923648,
-        "narHash": "sha256-4RpeKe7M0e+WKDyLLrqFABSbLkzgzIvxT2woT1RkbvA=",
-        "path": "/home/nino/yafw",
-        "type": "path"
+        "lastModified": 1754051672,
+        "narHash": "sha256-WZkYBUzbwPLNcUJY60pyD2yP+ri9QAXfw8/UQc9nrKU=",
+        "owner": "ninofaivre",
+        "repo": "yafw",
+        "rev": "7d1c960d5db8804c00834e10b7d13ca570a47d97",
+        "type": "github"
       },
       "original": {
-        "path": "/home/nino/yafw",
-        "type": "path"
+        "owner": "ninofaivre",
+        "repo": "yafw",
+        "type": "github"
       }
     },
     "zig2nix": {

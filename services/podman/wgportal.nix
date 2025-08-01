@@ -42,15 +42,14 @@ in
   services.kanidm.provision = let
     accessGroupName = "${kanidmWgportalOauthName}-access";
   in {
-    # TODO wait or do a PR so groups can be declared empty and not overwritten so
-    # I can imperatively add members to the group. (see https://github.com/oddlama/kanidm-provision/issues)"
-    /*
     groups."${accessGroupName}" = {
       members = [ adminGroupName ];
+      overwriteMembers = false;
     };
-    */
-    groups."${adminGroupName}" = {};
-    persons.services_admin.groups = [ adminGroupName ];
+    groups."${adminGroupName}" = {
+      members = [ "services_admin" ];
+      overwriteMembers = false;
+    };
     systems.oauth2."${kanidmWgportalOauthName}" = {
       inherit displayName;
       originUrl = "https://${domain}/";

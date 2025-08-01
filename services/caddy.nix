@@ -10,7 +10,9 @@ in
   };
 
   nftablesService.services."caddy".chains = {
-    "out" = "ip daddr 127.0.0.1 tcp dport ${toString config.nixBind.bindings."127.0.0.1".tcp."caddyAdmin"} accept";
+    "out" = ''
+      ip daddr 127.0.0.1 tcp dport ${toString config.nixBind.bindings."127.0.0.1".tcp."caddyAdmin"} accept
+    '';
     "in" = "";
   };
 

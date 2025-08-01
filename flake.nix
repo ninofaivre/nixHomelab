@@ -6,17 +6,18 @@
     nixpkgs-unstable.url = "nixpkgs/nixos-unstable";
 
     nixpkgs-fork-systemd-credentials.url = "github:ninofaivre/nixpkgs/kanidm-provision-use-systemd-credentials";
-    # nixpkgs-fork-kresd-add-lua-modules.url = "github:ninofaivre/nixpkgs/kresd-add-lua-modules";
-    nixpkgs-fork-kresd-add-lua-modules.url = "path:/home/nino/nixpkgs-fork-kresd-add-lua-modules";
+    # nixpkgs-fork-systemd-credentials.url = "path:/home/nino/nixpkgs-fork-kanidm-provision-use-systemd-credentials";
+    nixpkgs-fork-kresd-add-lua-modules.url = "github:ninofaivre/nixpkgs/kresd-add-lua-modules";
+    # nixpkgs-fork-kresd-add-lua-modules.url = "path:/home/nino/nixpkgs-fork-kresd-add-lua-modules";
 
     sops-nix.url = "github:Mic92/sops-nix";
 
-    #kresd-acns.url = "github:ninofaivre/kresd-acns";
-    kresd-acns.url = "path:/home/nino/kresd-acns";
-    #acns.url = "github:ninofaivre/acns";
-    acns.url = "path:/home/nino/acns";
-    # yafw.url = "github:ninofaivre/yafw";
-    yafw.url = "path:/home/nino/yafw";
+    kresd-acns.url = "github:ninofaivre/kresd-acns";
+    # kresd-acns.url = "path:/home/nino/kresd-acns";
+    acns.url = "github:ninofaivre/acns";
+    # acns.url = "path:/home/nino/acns";
+    yafw.url = "github:ninofaivre/yafw";
+    # yafw.url = "path:/home/nino/yafw";
   };
 
   outputs = {
@@ -27,7 +28,7 @@
   let
     system = "x86_64-linux";
     myUtils = (import ./myUtils/myUtils.nix) { inherit (nixpkgs) lib; };
-    minimalProfile = (import "${nixpkgs.outPath}/nixos/modules/profiles/minimal.nix");
+    # minimalProfile = (import "${nixpkgs.outPath}/nixos/modules/profiles/minimal.nix");
     unstablePkgs = import nixpkgs-unstable { inherit system; };
     #masterPkgs = import nixpkgs-master { inherit system; };
     myPkgs = {
@@ -130,21 +131,16 @@
     nixosConfigurations."NixOsNas" = nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = {
-        inherit myUtils minimalProfile networking unstablePkgs myPkgs;
+        inherit myUtils /*minimalProfile*/ networking unstablePkgs myPkgs;
       };
       modules = [
-        minimalProfile
         ({...}: {
           disabledModules = [
-            # TODO move to stable when paperless 15.1 (at least) is released
-            "services/misc/paperless.nix"
             # TODO move from fork when PR gets merged
             "services/security/kanidm.nix"
             "services/networking/kresd.nix"
           ];
         })
-        # TODO move to stable when paperless 15.1 (at least) will be on it
-        "${nixpkgs-unstable}/nixos/modules/services/misc/paperless.nix"
         # TODO move from fork when PR gets merged
         "${nixpkgs-fork-systemd-credentials}/nixos/modules/services/security/kanidm.nix"
         "${nixpkgs-fork-kresd-add-lua-modules}/nixos/modules/services/networking/kresd.nix"

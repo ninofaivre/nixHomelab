@@ -1,10 +1,5 @@
 { staging }:
 { config, lib, myUtils, networking, ... }:
-let
-  # TODO nix 25.05
-  concatMapAttrsStringSep = sep: f: attrs:
-    lib.concatStringsSep sep (lib.attrValues (lib.mapAttrs f attrs));
-in
 {
   nftablesService.trackDomains = [
     # traefik check for new version
@@ -30,6 +25,10 @@ in
               "paperless"
               "kanidm"
               "knot-resolver"
+
+              # Pilou #
+              "wordpressAlpha"
+              "wordpressCommandCenter"
             ];
             udp = [
               "knot-resolver"
@@ -57,7 +56,7 @@ in
             }) {} resolvers
           ;
         in
-        concatMapAttrsStringSep "" (port: addresses:
+        lib.concatMapAttrsStringSep "" (port: addresses:
           "ip daddr ${myUtils.listToNftablesSet addresses} meta l4proto { udp, tcp } th dport ${port} accept"
         ) portToAddrsAttr
       }
@@ -88,6 +87,9 @@ in
         };
         ${upLink.ips.lan.address} = {
           protos.tcp = [ "traefikPublicHttp" "traefikPublicHttps" ];
+          cond = "ct zone ${myUtils.listToNftablesSet (with marks.ct.zones; [
+            cloudflare
+          ])}";
         };
         ${upLink.ips.lanLocalDns.address} = {
           protos.tcp = [

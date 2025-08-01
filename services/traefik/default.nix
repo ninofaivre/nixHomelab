@@ -41,7 +41,6 @@ in
     inherit dataDir;
     staticConfigOptions = {
       log = { level = "ERROR"; };
-      accessLog = {};
       api = {
         dashboard = false;
         insecure = false;
@@ -59,7 +58,7 @@ in
         };
         "privateHttp" = {
           address = getAddressWithPort "127.0.0.1" "tcp" "traefikPrivateHttp";
-          http.redirections.entryPoint = { scheme = "https"; to = "publicHttps"; };
+          http.redirections.entryPoint = { scheme = "https"; to = "privateHttps"; };
         };
         "privateHttps" = {
           address = getAddressWithPort "127.0.0.1" "tcp" "traefikPrivateHttps";
@@ -140,6 +139,23 @@ in
             middlewares = ["testHomelabConnexionFromVpn"];
             tls.certResolver = "cloudflare";
           };
+
+          # Pilou #
+          "wordpressAlpha" = {
+            rule = "Host(`alpha.wordpress.pilou.hl.6e696e6f.dev`)";
+            service = "wordpressAlpha";
+            tls.certResolver = "cloudflare";
+          };
+          "wordpressTest" = {
+            rule = "Host(`test.wordpress.pilou.hl.6e696e6f.dev`)";
+            service = "wordpressAlpha";
+            tls.certResolver = "cloudflare";
+          };
+          "wordpressCommandCenter" = {
+            rule = "Host(`command-center.wordpress.pilou.hl.6e696e6f.dev`)";
+            service = "wordpressCommandCenter";
+            tls.certResolver = "cloudflare";
+          };
         };
         middlewares = {
           "redirectionFromHlToHomepageDotHl".redirectRegex = {
@@ -177,6 +193,14 @@ in
           }];
           "testHomelabConnexion".loadBalancer.servers = [{
             url = "http://${getAddressWithPort "127.0.0.1" "tcp" "caddyTest.hl"}";
+          }];
+
+          # Pilou #
+          "wordpressAlpha".loadBalancer.servers = [{
+            url = "http://${getAddressWithPort "127.0.0.1" "tcp" "wordpressAlpha"}";
+          }];
+          "wordpressCommandCenter".loadBalancer.servers = [{
+            url = "http://${getAddressWithPort "127.0.0.1" "tcp" "wordpressCommandCenter"}";
           }];
         };
       };

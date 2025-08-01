@@ -2,7 +2,7 @@
 # TODO setupd admin group via something like PAPERLESS_SOCIAL_ACCOUNT_ADMIN_GROUPS when the feature
 # gets implemented or mb do a PR myself (https://github.com/paperless-ngx/paperless-ngx/discussions/9250)
 { domain, dataDir, kanidm }:
-{ config, pkgs, unstablePkgs, lib, myUtils, ... }:
+{ config, lib, ... }:
 let
   scheme = "https";
   scopeMap = [ "email" "groups" "openid" "profile" ];
@@ -50,8 +50,6 @@ in
   nixBind.bindings."${config.services.paperless.address}".tcp."paperless" = config.services.paperless.port;
   services.paperless = {
     enable = true;
-    # TODO move to stable when paperless 15.1 (at least) will be on it
-    package = unstablePkgs.paperless-ngx;
     address = "127.0.0.1";
     inherit dataDir;
     settings = {
@@ -68,15 +66,14 @@ in
     accessGroupName = "${kanidmPaperlessOauthName}-access";
     adminGroupName = "${kanidmPaperlessOauthName}-admin";
   in {
-    # TODO wait or do a PR so groups can be declared empty and not overwritten so
-    # I can imperatively add members to the group. (see https://github.com/oddlama/kanidm-provision/issues)"
-    /*
     groups."${accessGroupName}" = {
       members = [ adminGroupName ];
+      overwriteMembers = false;
     };
-    */
-    groups."${adminGroupName}" = {};
-    persons.services_admin.groups = [ adminGroupName ];
+    groups."${adminGroupName}" = {
+      members = [ "services_admin" ];
+      overwriteMembers = false;
+    };
     systems.oauth2."${kanidmPaperlessOauthName}" = {
       displayName = "Paperless";
       originUrl = "${scheme}://${domain}/accounts/oidc/${paperlessKanidmProviderId}/login/callback/";

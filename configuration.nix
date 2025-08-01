@@ -2,7 +2,7 @@
 # your system. Help is available in the configuration.nix(5) man page, on
 # https://search.nixos.org/options and in the NixOS manual (`nixos-help`).
 
-{ config, lib, pkgs, networking, ... }:
+{ config, lib, pkgs, ... }:
 {
   imports = [
     ./hardware-configuration.nix
@@ -83,32 +83,6 @@
 
 
   # Enable the OpenSSH daemon.
-  nixBind.bindings."${networking.interfaces.upLink.ips.lan.address}".tcp."ssh" = 22;
-  nixBind.bindings."${networking.interfaces.vpnServer.ips.adminServices.address}".tcp."ssh" = 22;
-  systemd.services.sshd.after = ["systemd-networkd-wait-online.service" "wireguard-wg0.service"];
-  services.openssh = {
-    enable = true;
-    openFirewall = false;
-    listenAddresses =
-      with networking.interfaces;
-    [
-      {
-        addr = networking.interfaces.upLink.ips.lan.address;
-        port = config.nixBind.bindings.${upLink.ips.lan.address}.tcp.ssh;
-      }
-      {
-        addr = networking.interfaces.vpnServer.ips.adminServices.address;
-        port = config.nixBind.bindings.${vpnServer.ips.adminServices.address}.tcp.ssh;
-      }
-    ];
-    settings = {
-      PermitRootLogin = "no";
-      PasswordAuthentication = false;
-      KbdInteractiveAuthentication = false;
-      PermitUserEnvironment = "yes";
-      AcceptEnv = "TERM";
-    };
-  };
 
   # Open ports in the firewall.
   # networking.firewall.allowedTCPPorts = [ ... ];

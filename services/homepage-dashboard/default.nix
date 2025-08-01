@@ -16,6 +16,7 @@
     settings = {
       title = "homelab homepage";
     };
+    allowedHosts = servicesConfig.homepage-dashboard.domain;
     services = myUtils.dictToYamlNamedArray (
       builtins.mapAttrs (_: v: myUtils.dictToYamlNamedArray v) (
         builtins.foldl' (acc: {name,value}:

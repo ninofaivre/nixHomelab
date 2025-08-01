@@ -56,5 +56,7 @@ in
       vectorLogFifoPath = nftablesVectorLogFifoPath;
     })
     (import ./acns.nix { inherit accessGroups; })
+    ./ssh.nix
+    ./pilou
   ];
 }

@@ -1,6 +1,6 @@
 # TODO PR to use systemd-creds instead of bindReadOnlyPaths for provision secret files ???
 { domain, root, dataDir }:
-{ lib, config, pkgs, ... }:
+{ config, pkgs, ... }:
 let
   scheme = "https";
 in
@@ -11,17 +11,12 @@ in
     origin = "${scheme}://${domain}";
   in
   {
-    package = pkgs.kanidm_1_5.withSecretProvisioning;
+    package = pkgs.kanidmWithSecretProvisioning;
     enableClient = true;
     clientSettings.uri = origin;
     enableServer = true;
     provision = {
       enable = true;
-      # TODO wait or do a PR so groups can be declared empty and not overwritten so
-      # I can imperatively add members to the group. (see https://github.com/oddlama/kanidm-provision/issues)"
-      # extraJsonFile disable some assertions for use of undeclared groups (which I'm forced
-      # to create imperatively for now (<service-name>-access groups))
-      extraJsonFile = builtins.toFile "empty.json" ''{}'';
       adminPasswordFile = config.sops.secrets."kanidm/accounts/admin".path;
       idmAdminPasswordFile = config.sops.secrets."kanidm/accounts/idmAdmin".path;
       persons = {

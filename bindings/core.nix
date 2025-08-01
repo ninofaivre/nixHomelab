@@ -1,9 +1,6 @@
 { lib, config, myUtils, ... }:
 let
   cfg = config.nixBind;
-  # TODO nix 25.05
-  concatMapAttrsStringSep = sep: f: attrs:
-    lib.concatStringsSep sep (lib.attrValues (lib.mapAttrs f attrs));
 in
 {
   options.nixBind = with lib; {
@@ -11,7 +8,7 @@ in
       default = {};
       type = types.attrsOf (types.submodule ({name, ...}: {
         options = {
-          # TODO make proto a submodule
+          # TODO make proto a submodule to allow any proto
           tcp = mkOption {
             default = {};
             type = types.attrsOf types.int;
@@ -39,10 +36,8 @@ in
           ) ports)
         ;
       in
-        # TODO nix 25.05
-        #lib.strings.
-        concatMapAttrsStringSep "" (address: value:
-          concatMapAttrsStringSep
+        lib.concatMapAttrsStringSep "" (address: value:
+          lib.concatMapAttrsStringSep
             ""
             (proto: ports:
               "ip daddr ${address} ${proto} dport ${getNftPorts address proto ports} ${
